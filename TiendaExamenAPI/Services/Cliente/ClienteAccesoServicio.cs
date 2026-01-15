@@ -1,5 +1,4 @@
 ﻿using Microsoft.IdentityModel.Tokens;
-using System.Data;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
@@ -13,103 +12,110 @@ namespace TiendaExamenAPI.Services.Cliente
 {
     public class ClienteAccesoServicio
     {
-        ServiciosGenerales generales = new();
-        ClienteRepositorio cliente = new();
+        private readonly ClienteRepositorio _clienteRepositorio;
+        private readonly ServiciosGenerales _generales;
+        private readonly IConfiguration _config;
 
-        public async Task<Response> login(dtoClienteAcceso data)
+        public ClienteAccesoServicio(
+            ClienteRepositorio clienteRepositorio,
+            ServiciosGenerales generales,
+            IConfiguration config)
         {
-            long ID = 0;
-            string NOMBRE = "";
-            string CORREO = "";
-            string PASSWORD = "";
-            string IMG = "";
-            if (string.IsNullOrEmpty(data.correo_electronico))
+            _clienteRepositorio = clienteRepositorio;
+            _generales = generales;
+            _config = config;
+        }
+
+        public async Task<Response> LoginAsync(dtoClienteAcceso data)
+        {
+            if (string.IsNullOrWhiteSpace(data.correo_electronico))
+            {
+                return ResponseError("901", "El campo correo es requerido");
+            }
+
+            if (string.IsNullOrWhiteSpace(data.contrasena))
+            {
+                return ResponseError("901", "El campo contraseña es requerido");
+            }
+
+            string passwordHash = _generales.Encrypt(data.contrasena);
+
+            var cliente = await _clienteRepositorio.ObtenerInfoLoginAsync(
+                data.correo_electronico,
+                passwordHash);
+
+            if (cliente == null)
             {
                 return new Response
                 {
-                    codigo = "901",
-                    mensaje = "El campo de correo no puede estar vacío",
+                    codigo = "403",
+                    mensaje = "Acceso incorrecto",
                     respuesta = ""
                 };
             }
 
-            if (string.IsNullOrEmpty(data.contrasena))
+            string token = GenerarJwt(cliente.id, cliente.correo_electronico);
+
+            if (string.IsNullOrEmpty(token))
             {
-                return new Response
-                {
-                    codigo = "901",
-                    mensaje = "El campo de contraseña no puede estar vacio",
-                    respuesta = ""
-                };
+                return ResponseError("902", "Error al generar token");
             }
 
-            data.contrasena = generales.Encrypt(data.contrasena);
-            DataTable dtInfo = cliente.obtenerInfoLogin(data.correo_electronico, data.contrasena);
-            if (dtInfo.Rows.Count > 0)
-            {
-                ID = Convert.ToInt64(dtInfo.Rows[0]["ID"].ToString());
-                NOMBRE = dtInfo.Rows[0]["nombre_completo"].ToString();
-                CORREO = dtInfo.Rows[0]["correo_electronico"].ToString();
-                PASSWORD = dtInfo.Rows[0]["contrasena"].ToString();
-                string jwt = generateJWT(ID.ToString(), CORREO, PASSWORD, DateTime.Now);
-                if (string.IsNullOrEmpty(jwt))
-                {
-                    return new Response
-                    {
-                        codigo = "902",
-                        mensaje = "Ocurrio un error a el generar un token de autenticación.",
-                        respuesta = ""
-                    };
-                }
-                return new Response
-                {
-                    codigo = "200",
-                    mensaje = "Acceso correcto",
-                    respuesta = new
-                    {
-                        token = jwt,
-
-                    }
-                };
-            }
             return new Response
             {
-                codigo = "403",
-                mensaje = "Acceso incorrecto",
-                respuesta = ""
+                codigo = "200",
+                mensaje = "Acceso correcto",
+                respuesta = new
+                {
+                    token
+                }
             };
         }
-        public string generateJWT(string id, string correo, string password, DateTime creacion)
+
+        private string GenerarJwt(long id, string correo)
         {
-            Clave data = new Clave();
-            string clave = data.getClave();
             try
             {
                 var claims = new[]
                 {
-                    new Claim(JWTKEYS.KEY_ID, id),
+                    new Claim(JWTKEYS.KEY_ID, id.ToString()),
                     new Claim(JWTKEYS.KEY_CORREO, correo),
-                    new Claim(JWTKEYS.KEY_PASSWORD, password),
-                    new Claim(JWTKEYS.KEY_CREACION, creacion.ToString()),
                     new Claim(ClaimTypes.Role, JWTKEYS.KEY_ROL_CLIENTE),
+                    new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
                 };
 
-                DateTime d = DateTime.Now.AddDays(30);
-                var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(clave));
-                var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256Signature);
-                var securytyToken = new JwtSecurityToken(
-                    claims: claims,
-                    expires: d,
-                    signingCredentials: creds
-                    );
+                string secretKey = _config["Jwt:Key"];
+                string issuer = _config["Jwt:Issuer"];
+                string audience = _config["Jwt:Audience"];
 
-                string Token = new JwtSecurityTokenHandler().WriteToken(securytyToken);
-                return Token;
+                var key = new SymmetricSecurityKey(
+                    Encoding.UTF8.GetBytes(secretKey));
+
+                var creds = new SigningCredentials(
+                    key, SecurityAlgorithms.HmacSha256);
+
+                var token = new JwtSecurityToken(
+                    issuer: issuer,
+                    audience: audience,
+                    claims: claims,
+                    expires: DateTime.UtcNow.AddDays(30),
+                    signingCredentials: creds
+                );
+
+                return new JwtSecurityTokenHandler().WriteToken(token);
             }
-            catch (Exception)
+            catch
             {
+                return null;
             }
-            return null;
         }
+
+        private static Response ResponseError(string codigo, string mensaje) =>
+            new()
+            {
+                codigo = codigo,
+                mensaje = mensaje,
+                respuesta = ""
+            };
     }
 }

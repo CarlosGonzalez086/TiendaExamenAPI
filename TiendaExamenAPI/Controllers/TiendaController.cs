@@ -1,46 +1,56 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using TiendaExamenAPI.DbData.DtoModels.Tienda;
+using TiendaExamenAPI.DbData.DtoModels.Response;
 using TiendaExamenAPI.Services.Tienda;
 
 namespace TiendaExamenAPI.Controllers
 {
-    [Route("api/[controller]")]
     [ApiController]
+    [Route("api/[controller]")]
     public class TiendaController : ControllerBase
     {
-        TiendaServicios tienda = new();
+        private readonly TiendaServicios _tienda;
+
+        public TiendaController(TiendaServicios tienda)
+        {
+            _tienda = tienda;
+        }
 
         [HttpPost]
-        public async Task<IActionResult> guardarTienda(dtoTienda data)
+        public async Task<IActionResult> GuardarTienda([FromBody] dtoTienda data)
         {
-            DbData.DtoModels.Response.Response resp = new();
-            resp = await tienda.guardarTienda(data);
+            Response resp = await _tienda.GuardarTiendaAsync(data);
             return Ok(resp);
         }
+
 
         [HttpPut]
-        public async Task<IActionResult> actualizarCliente(dtoTienda data)
+        public async Task<IActionResult> ActualizarTienda([FromBody] dtoTienda data)
         {
-            DbData.DtoModels.Response.Response resp = new();
-            resp = await tienda.actualizarTienda(data);
+            Response resp = await _tienda.ActualizarTiendaAsync(data);
             return Ok(resp);
         }
 
-        [HttpGet("{id}")]
-        public async Task<IActionResult> obtenerTienda(long id)
+
+        [HttpGet("{id:long}")]
+        public async Task<IActionResult> ObtenerTienda(long id)
         {
-            DbData.DtoModels.Response.Response resp = new();
-            resp = await tienda.obtenerTienda(id);
+            Response resp = await _tienda.ObtenerTiendaAsync(id);
             return Ok(resp);
         }
 
-        [HttpDelete("{id}")]
+
+        [HttpDelete("{id:long}")]
         public async Task<IActionResult> EliminarTienda(long id)
         {
-            DbData.DtoModels.Response.Response resp = new();
-            resp = await tienda.EliminarTienda(id);
+            Response resp = await _tienda.EliminarTiendaAsync(id);
             return Ok(resp);
         }
-
+        [HttpGet("all")]
+        public async Task<IActionResult> ObtenerTiendas()
+        {
+            Response resp = await _tienda.ObtenerTiendasAsync();
+            return Ok(resp);
+        }
     }
 }

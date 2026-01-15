@@ -5,18 +5,22 @@ using TiendaExamenAPI.Services.Cliente;
 
 namespace TiendaExamenAPI.Controllers
 {
-    [Route("api/[controller]")]
     [ApiController]
+    [Route("api/[controller]")]
     public class ClienteAccesoController : ControllerBase
     {
-        ClienteAccesoServicio clienteAcceso = new();
-        [HttpPost]
-        public async Task<IActionResult> login(dtoClienteAcceso data)
-        {
-            await Task.Delay(1000);
-            Response resp = new();
+        private readonly ClienteAccesoServicio _clienteAccesoServicio;
 
-            resp = await clienteAcceso.login(data);
+        public ClienteAccesoController(ClienteAccesoServicio clienteAccesoServicio)
+        {
+            _clienteAccesoServicio = clienteAccesoServicio;
+        }
+
+
+        [HttpPost("login")]
+        public async Task<IActionResult> Login([FromBody] dtoClienteAcceso data)
+        {
+            Response resp = await _clienteAccesoServicio.LoginAsync(data);
             return Ok(resp);
         }
     }

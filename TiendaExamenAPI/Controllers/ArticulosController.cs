@@ -1,53 +1,58 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using TiendaExamenAPI.DbData.DtoModels.articulos;
 using TiendaExamenAPI.Services.Articulos;
+using TiendaExamenAPI.DbData.DtoModels.Response;
 
 namespace TiendaExamenAPI.Controllers
 {
-    [Route("api/[controller]")]
     [ApiController]
+    [Route("api/[controller]")]
     public class ArticulosController : ControllerBase
     {
+        private readonly ArticulosServicios _articulosServicios;
 
-        ArticulosServicios articulos = new();
+        public ArticulosController(ArticulosServicios articulosServicios)
+        {
+            _articulosServicios = articulosServicios;
+        }
 
         [HttpPost]
-        public async Task<IActionResult> guardarArticulo(dtoArticulos data)
+        public async Task<IActionResult> GuardarArticulo([FromBody] dtoArticulos data)
         {
-            DbData.DtoModels.Response.Response resp = new();
-            resp = await articulos.guardarArticulo(data);
+            Response resp = await _articulosServicios.GuardarArticuloAsync(data);
             return Ok(resp);
         }
+
 
         [HttpPut]
-        public async Task<IActionResult> actualizarArticulo(dtoArticulos data)
+        public async Task<IActionResult> ActualizarArticulo([FromBody] dtoArticulos data)
         {
-            DbData.DtoModels.Response.Response resp = new();
-            resp = await articulos.actualizarArticulo(data);
+            Response resp = await _articulosServicios.ActualizarArticuloAsync(data);
             return Ok(resp);
         }
 
-        [HttpGet("{id}")]
-        public async Task<IActionResult> obtenerArticulo(long id)
+
+        [HttpGet("{id:long}")]
+        public async Task<IActionResult> ObtenerArticulo(long id)
         {
-            DbData.DtoModels.Response.Response resp = new();
-            resp = await articulos.obtenerArticulo(id);
+            Response resp = await _articulosServicios.ObtenerArticuloAsync(id);
             return Ok(resp);
         }
 
-        [HttpDelete("{id}")]
+
+        [HttpDelete("{id:long}")]
         public async Task<IActionResult> EliminarArticulo(long id)
         {
-            DbData.DtoModels.Response.Response resp = new();
-            resp = await articulos.EliminarArticulo(id);
+            Response resp = await _articulosServicios.EliminarArticuloAsync(id);
             return Ok(resp);
         }
 
         [HttpGet("lista")]
-        public async Task<IActionResult> lista(int iTake = 5, int iSkip = 0)
+        public async Task<IActionResult> Lista(
+            [FromQuery] int iTake = 5,
+            [FromQuery] int iSkip = 0)
         {
-            DbData.DtoModels.Response.Response resp = new();
-             resp = await articulos.lista(iTake, iSkip);
+            Response resp = await _articulosServicios.ListaAsync(iTake, iSkip);
             return Ok(resp);
         }
     }

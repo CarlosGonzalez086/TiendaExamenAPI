@@ -1,135 +1,114 @@
-﻿using Microsoft.Data.SqlClient;
-using System.Data;
-using TiendaExamenAPI.DbData.Connection;
+﻿using Microsoft.EntityFrameworkCore;
+using TiendaExamenAPI.DbData;
 using TiendaExamenAPI.DbData.DtoModels.articulos;
-using TiendaExamenAPI.DbData.DtoModels.Cliente;
-using TiendaExamenAPI.DbData.DtoModels.Tienda;
+using TiendaExamenAPI.Modelos;
 
 namespace TiendaExamenAPI.DbData.Repository.Articulos
 {
     public class ArticulosRepositorio
     {
-        DbData.Connection.Connection conexion = new();
+        private readonly MiTiendaDbContext _context;
 
-        public dtoArticulos obternerPorId(long ID)
+        public ArticulosRepositorio(MiTiendaDbContext context)
         {
-            string sql = $@"SELECT 
-                            id,
-                            codigo,
-                            descripcion,
-                            precio,
-                            imagen,
-                            stock
-                        FROM articulos 
-                       WHERE id = {ID}";
-            var dt = conexion.Consultasql(sql);
-
-            if (dt.Rows.Count == 0)
-                return null;
-
-            var row = dt.Rows[0];
-            return new dtoArticulos
-            {
-                id = long.Parse(row["id"].ToString()),
-                codigo = row["codigo"].ToString(),
-                descripcion = row["descripcion"].ToString(),
-                precio = Convert.ToDecimal(row["precio"].ToString()),
-                imagen = row["imagen"].ToString(),
-                stock = Convert.ToInt32(row["stock"].ToString()),
-            };
+            _context = context;
         }
-        public async Task<bool> insertado(dtoArticulos dtoArticulo)
+        public async Task<dtoArticulos?> ObtenerPorIdAsync(long id)
+        {
+            return await _context.Articulos
+                .Where(a => a.Id == id && !a.Eliminado)
+                .Select(a => new dtoArticulos
+                {
+                    id = a.Id,
+                    codigo = a.Codigo,
+                    descripcion = a.Descripcion,
+                    precio = a.Precio,
+                    imagen = a.Imagen,
+                    stock = a.Stock ?? 0
+                })
+                .FirstOrDefaultAsync();
+        }
+
+        public async Task<bool> InsertadoAsync(dtoArticulos dto)
         {
             try
             {
-                string sql = @"
-                                INSERT INTO articulos 
-                                    (codigo, 
-                                     descripcion, 
-                                     imagen, 
-                                     fecha, 
-                                     precio, 
-                                     stock)
-                                VALUES (
-                                    @codigo,
-                                    @descripcion,
-                                    @imagen,
-                                    @fecha,
-                                    @precio,
-                                    @stock);";
+                var entity = new Articulo
+                {
+                    Codigo = dto.codigo,
+                    Descripcion = dto.descripcion,
+                    Imagen = dto.imagen,
+                    Precio = dto.precio,
+                    Stock = dto.stock,
+                    Fecha = DateTime.UtcNow,
+                    Eliminado = false,
+                    Activo = true
+                };
 
-                SqlCommand cmd = new SqlCommand(sql, conexion.ConnectionSql());
-                cmd.Parameters.Add("@codigo", SqlDbType.VarChar).Value = dtoArticulo.codigo;
-                cmd.Parameters.Add("@descripcion", SqlDbType.VarChar).Value = dtoArticulo.descripcion;
-                cmd.Parameters.Add("@imagen", SqlDbType.VarChar).Value = dtoArticulo.imagen;
-                cmd.Parameters.Add("@stock", SqlDbType.Int).Value = dtoArticulo.stock;
-                cmd.Parameters.Add("@precio", SqlDbType.Decimal).Value = dtoArticulo.precio;
-                cmd.Parameters.Add("@fecha", SqlDbType.DateTime).Value = DateTime.UtcNow;
-                return conexion.InsertaSql("", cmd);
+                _context.Articulos.Add(entity);
+                await _context.SaveChangesAsync();
+
+                return true;
             }
-            catch (Exception ex)
+            catch
             {
                 return false;
             }
         }
-        public bool actualizacion(dtoArticulos dtoArticulo, long ID)
+
+        public async Task<bool> ActualizacionAsync(dtoArticulos dto, long id)
         {
-            string sql = @$"UPDATE articulos SET
-                            codigo =  @codigo,
-                            descripcion = @descripcion,
-                            imagen = @imagen,
-                            stock = @stock,
-                            precio = @precio,
-                            fecha_actualizacion = @fecha_actualizacion
-                            WHERE id = @id";
+            var articulo = await _context.Articulos.FindAsync(id);
+            if (articulo == null) return false;
 
-            SqlCommand cmd = new SqlCommand(sql, conexion.ConnectionSql());
-            cmd.Parameters.Add("@codigo", SqlDbType.UniqueIdentifier).Value = dtoArticulo.codigo;
-            cmd.Parameters.Add("@descripcion", SqlDbType.VarChar).Value = dtoArticulo.descripcion;
-            cmd.Parameters.Add("@imagen", SqlDbType.VarChar).Value = dtoArticulo.imagen;
-            cmd.Parameters.Add("@stock", SqlDbType.Int).Value = dtoArticulo.stock;
-            cmd.Parameters.Add("@precio", SqlDbType.Decimal).Value = dtoArticulo.precio;
-            cmd.Parameters.Add("@fecha_actualizacion", SqlDbType.DateTime).Value = DateTime.UtcNow;
-            cmd.Parameters.Add("@id", SqlDbType.BigInt).Value = ID;
+            articulo.Codigo = dto.codigo;
+            articulo.Descripcion = dto.descripcion;
+            articulo.Imagen = dto.imagen;
+            articulo.Stock = dto.stock;
+            articulo.Precio = dto.precio;
+            articulo.FechaActualizacion = DateTime.UtcNow;
 
-            return conexion.InsertaSql("", cmd);
+            await _context.SaveChangesAsync();
+            return true;
         }
-        public bool eliminacion(long id)
+
+        public async Task<bool> EliminacionAsync(long id)
         {
-            string sql = @"UPDATE articulos
-                        SET eliminado = 1,
-                        fecha_eliminado = @fecha_eliminado
-                        WHERE id = @id ";
+            var articulo = await _context.Articulos.FindAsync(id);
+            if (articulo == null) return false;
 
-            SqlCommand cmd = new SqlCommand(sql, conexion.ConnectionSql());
-            cmd.Parameters.Add("@fecha_eliminado", SqlDbType.DateTime).Value = DateTime.UtcNow;
-            cmd.Parameters.Add("@id", SqlDbType.BigInt).Value = id;
+            articulo.Eliminado = true;
+            articulo.FechaEliminado = DateTime.UtcNow;
 
-            return conexion.InsertaSql("", cmd);
+            await _context.SaveChangesAsync();
+            return true;
         }
-        public (DataTable dtInfo, int filas) lista(int iTake, int iSkip)
-        {
-            string sqlData = $@"
-                           SELECT 
-                            a.id,
-                            a.codigo,
-                            a.descripcion,
-                            a.imagen,
-                            a.stock,
-                            a.precio,
-                            COUNT(*) OVER() as TotalRegistros   
-	                        FROM 
-                            articulos a (NOLOCK)
-	                        WHERE 
-                            a.eliminado = 0
-                            ORDER BY fecha DESC
-                            OFFSET {iSkip} ROWS
-                            FETCH NEXT {iTake} ROWS ONLY ";
 
-            SqlCommand cmd = new SqlCommand(sqlData, conexion.ConnectionSql());
-            DataTable dtInfo = conexion.Consultasql("", cmd);
-            int totalRows = dtInfo.Rows.Count > 0 ? Convert.ToInt32(dtInfo.Rows[0]["TotalRegistros"]) : 0;
-            return (dtInfo, totalRows);
+        public async Task<(List<dtoArticulos> data, int total)> ListaAsync(
+            int take,
+            int skip)
+        {
+            var query = _context.Articulos
+                .Where(a => !a.Eliminado)
+                .OrderByDescending(a => a.Fecha);
+
+            var total = await query.CountAsync();
+
+            var data = await query
+                .Skip(skip)
+                .Take(take)
+                .Select(a => new dtoArticulos
+                {
+                    id = a.Id,
+                    codigo = a.Codigo,
+                    descripcion = a.Descripcion,
+                    imagen = a.Imagen,
+                    stock = a.Stock ?? 0,
+                    precio = a.Precio
+                })
+                .ToListAsync();
+
+            return (data, total);
         }
     }
 }

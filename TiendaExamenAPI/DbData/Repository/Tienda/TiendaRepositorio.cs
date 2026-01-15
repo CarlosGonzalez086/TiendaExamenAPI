@@ -1,89 +1,92 @@
-﻿using Microsoft.Data.SqlClient;
-using System.Data;
-using TiendaExamenAPI.DbData.Connection;
-using TiendaExamenAPI.DbData.DtoModels.Cliente;
+﻿using Microsoft.EntityFrameworkCore;
+using TiendaExamenAPI.DbData;
 using TiendaExamenAPI.DbData.DtoModels.Tienda;
+
 
 namespace TiendaExamenAPI.DbData.Repository.Tienda
 {
     public class TiendaRepositorio
     {
-        DbData.Connection.Connection conexion = new();
+        private readonly MiTiendaDbContext _context;
 
-        public async Task<bool> insertado(dtoTienda dtoTienda)
+        public TiendaRepositorio(MiTiendaDbContext context)
+        {
+            _context = context;
+        }
+
+        public async Task<bool> InsertadoAsync(dtoTienda dto)
         {
             try
             {
-                string sql = @"
-                                INSERT INTO tiendas 
-                                    (sucursal, 
-                                     direccion, 
-                                     fecha)
-                                VALUES (
-                                    @sucursal,
-                                    @direccion,   
-                                    @fecha);";
+                var tienda = new TiendaExamenAPI.Modelos.Tienda
+                {
+                    Sucursal = dto.sucursal,
+                    Direccion = dto.direccion,
+                    Fecha = DateTime.UtcNow,
+                    Eliminado = false
+                };
 
-                SqlCommand cmd = new SqlCommand(sql, conexion.ConnectionSql());
-                cmd.Parameters.Add("@sucursal", SqlDbType.VarChar).Value = dtoTienda.sucursal;
-                cmd.Parameters.Add("@direccion", SqlDbType.VarChar).Value = dtoTienda.direccion;
-                cmd.Parameters.Add("@fecha", SqlDbType.DateTime).Value = DateTime.UtcNow;
-                return conexion.InsertaSql("", cmd);
+                _context.Tiendas.Add(tienda);
+                await _context.SaveChangesAsync();
+                return true;
             }
-            catch (Exception ex)
+            catch
             {
                 return false;
             }
         }
-        public dtoTienda obternerPorId(long ID)
+
+        public async Task<dtoTienda?> ObtenerPorIdAsync(long id)
         {
-            string sql = $@"SELECT 
-                            id,
-                            sucursal,
-                            direccion
-                        FROM tiendas 
-                       WHERE id = {ID}";
-            var dt = conexion.Consultasql(sql);
-
-            if (dt.Rows.Count == 0)
-                return null;
-
-            var row = dt.Rows[0];
-            return new dtoTienda
-            {
-                id = long.Parse(row["id"].ToString()),
-                sucursal = row["sucursal"].ToString(),
-                direccion = row["direccion"].ToString()
-            };
+            return await _context.Tiendas
+                .Where(t => t.Id == id && !t.Eliminado)
+                .Select(t => new dtoTienda
+                {
+                    id = t.Id,
+                    sucursal = t.Sucursal,
+                    direccion = t.Direccion
+                })
+                .FirstOrDefaultAsync();
         }
-        public bool actualizacion(dtoTienda dto, long ID)
+
+
+        public async Task<bool> ActualizacionAsync(dtoTienda dto, long id)
         {
-            string sql = @$"UPDATE tiendas SET
-                            sucursal =  @sucursal,
-                            direccion = @direccion,
-                            fecha_actualizacion = @fecha_actualizacion
-                            WHERE id = @id";
+            var tienda = await _context.Tiendas.FindAsync(id);
+            if (tienda == null) return false;
 
-            SqlCommand cmd = new SqlCommand(sql, conexion.ConnectionSql());
-            cmd.Parameters.Add("@sucursal", SqlDbType.VarChar).Value = dto.sucursal;
-            cmd.Parameters.Add("@direccion", SqlDbType.VarChar).Value = dto.direccion;
-            cmd.Parameters.Add("@fecha_actualizacion", SqlDbType.DateTime).Value = DateTime.UtcNow;
-            cmd.Parameters.Add("@id", SqlDbType.BigInt).Value = ID;
+            tienda.Sucursal = dto.sucursal;
+            tienda.Direccion = dto.direccion;
+            tienda.FechaActualizacion = DateTime.UtcNow;
 
-            return conexion.InsertaSql("", cmd);
+            await _context.SaveChangesAsync();
+            return true;
         }
-        public bool eliminacion(long id)
+
+
+        public async Task<bool> EliminacionAsync(long id)
         {
-            string sql = @"UPDATE tiendas
-                        SET eliminado = 1,
-                        fecha_eliminado = @fecha_eliminado
-                        WHERE id = @id ";
+            var tienda = await _context.Tiendas.FindAsync(id);
+            if (tienda == null) return false;
 
-            SqlCommand cmd = new SqlCommand(sql, conexion.ConnectionSql());
-            cmd.Parameters.Add("@fecha_eliminado", SqlDbType.DateTime).Value = DateTime.UtcNow;
-            cmd.Parameters.Add("@id", SqlDbType.BigInt).Value = id;
+            tienda.Eliminado = true;
+            tienda.FechaEliminado = DateTime.UtcNow;
 
-            return conexion.InsertaSql("", cmd);
+            await _context.SaveChangesAsync();
+            return true;
         }
+        public async Task<List<dtoTienda>> ObtenerTodosAsync()
+        {
+            return await _context.Tiendas
+                .Where(t => !t.Eliminado) 
+                .Select(t => new dtoTienda
+                {
+                    id = t.Id,
+                    sucursal = t.Sucursal,
+                    direccion = t.Direccion
+                })
+                .ToListAsync();
+        }
+
     }
 }

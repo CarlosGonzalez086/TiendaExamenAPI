@@ -1,8 +1,5 @@
-﻿using Newtonsoft.Json;
-using System.Reflection;
-using TiendaExamenAPI.DbData.DtoModels.articulos;
+﻿using TiendaExamenAPI.DbData.DtoModels.articulos;
 using TiendaExamenAPI.DbData.DtoModels.Response;
-using TiendaExamenAPI.DbData.DtoModels.Tienda;
 using TiendaExamenAPI.DbData.Repository.Articulos;
 using TiendaExamenAPI.Services.FuncionesGenerales;
 
@@ -10,219 +7,162 @@ namespace TiendaExamenAPI.Services.Articulos
 {
     public class ArticulosServicios
     {
-        ArticulosRepositorio articulos = new();
-        ImageStorageService storageService = new();
-        public async Task<Response> guardarArticulo(dtoArticulos articuloInfo)
-        {
-            if (string.IsNullOrEmpty(articuloInfo.codigo))
-            {
-                return new Response
-                {
-                    codigo = "901",
-                    mensaje = "El campo del codigo es requerido",
-                    respuesta = ""
-                };
-            }
-            if (string.IsNullOrEmpty(articuloInfo.descripcion))
-            {
-                return new Response
-                {
-                    codigo = "901",
-                    mensaje = "El campo de la descripcion es requerido",
-                    respuesta = ""
-                };
-            }
-            if (!string.IsNullOrEmpty(articuloInfo.imagen))
-            {
-                Response result = await storageService.SaveImageAsync(null, articuloInfo.imagen);
+        private readonly ArticulosRepositorio _repositorio;
+        private readonly ImageStorageService _storageService;
 
-                if (result.codigo == "000")
+        public ArticulosServicios(
+            ArticulosRepositorio repositorio,
+            ImageStorageService storageService)
+        {
+            _repositorio = repositorio;
+            _storageService = storageService;
+        }
+        public async Task<Response> GuardarArticuloAsync(dtoArticulos info)
+        {
+            var validacion = ValidarArticulo(info, esActualizacion: false);
+            if (validacion != null) return validacion;
+
+            if (!string.IsNullOrEmpty(info.imagen))
+            {
+                var imgResult = await _storageService.SaveImageAsync(null, info.imagen);
+                if (imgResult.codigo == "000")
                 {
-                    articuloInfo.imagen = result.respuesta.ToString();
+                    info.imagen = imgResult.respuesta.ToString();
                 }
             }
 
+            bool ok = await _repositorio.InsertadoAsync(info);
 
-
-            if (articuloInfo.precio == 0)
-            {
-                return new Response
-                {
-                    codigo = "901",
-                    mensaje = "El campo del precio es requerido",
-                    respuesta = ""
-                };
-            }
-            if (articuloInfo.stock == 0)
-            {
-                return new Response
-                {
-                    codigo = "901",
-                    mensaje = "El campo del stock es requerido",
-                    respuesta = ""
-                };
-            }
-
-            var insertOk = await articulos.insertado(articuloInfo);
-
-            if (insertOk)
-            {
-                return new Response
-                {
-                    codigo = "200",
-                    mensaje = "Articulo registrado correctamente",
-                };
-            }
-            return new Response
-            {
-                codigo = "900",
-                mensaje = "Ha ocurrido un error al registrarse, intente más tarde",
-            };
-
+            return ok
+                ? ResponseOk("Articulo registrado correctamente")
+                : ResponseError("900", "Ha ocurrido un error al registrar");
         }
 
-        public async Task<Response> actualizarArticulo(dtoArticulos articuloInfo)
+        public async Task<Response> ActualizarArticuloAsync(dtoArticulos info)
         {
-
-            long Id = articuloInfo.id;
-
-            if (string.IsNullOrEmpty(articuloInfo.codigo))
+            if (info.id <= 0)
             {
-                return new Response
-                {
-                    codigo = "901",
-                    mensaje = "El campo del codigo es requerido",
-                    respuesta = ""
-                };
-            }
-            if (string.IsNullOrEmpty(articuloInfo.descripcion))
-            {
-                return new Response
-                {
-                    codigo = "901",
-                    mensaje = "El campo de la descripcion es requerido",
-                    respuesta = ""
-                };
-            }
-            if (string.IsNullOrEmpty(articuloInfo.imagen))
-            {
-                return new Response
-                {
-                    codigo = "901",
-                    mensaje = "El campo de la imagen es requerido",
-                    respuesta = ""
-                };
-            }
-            if (articuloInfo.precio == 0)
-            {
-                return new Response
-                {
-                    codigo = "901",
-                    mensaje = "El campo del precio es requerido",
-                    respuesta = ""
-                };
-            }
-            if (articuloInfo.stock == 0)
-            {
-                return new Response
-                {
-                    codigo = "901",
-                    mensaje = "El campo del stock es requerido",
-                    respuesta = ""
-                };
+                return ResponseError("901", "ID inválido");
             }
 
+            var validacion = ValidarArticulo(info, esActualizacion: true);
+            if (validacion != null) return validacion;
 
-            bool insertOk = articulos.actualizacion(articuloInfo, Id);
+            if (!string.IsNullOrEmpty(info.imagen))
+            {
+                var imgResult = await _storageService.SaveImageAsync(null, info.imagen);
+                if (imgResult.codigo == "000")
+                {
+                    info.imagen = imgResult.respuesta.ToString();
+                }
+            }
 
-            if (!insertOk)
+            bool ok = await _repositorio.ActualizacionAsync(info, info.id);
+
+            return ok
+                ? ResponseOk("Guardado correctamente")
+                : ResponseError("900", "Ha ocurrido un error al actualizar");
+        }
+
+        public async Task<Response> ObtenerArticuloAsync(long id)
+        {
+            if (id <= 0)
+            {
+                return ResponseError("901", "Parámetros incorrectos");
+            }
+
+            var articulo = await _repositorio.ObtenerPorIdAsync(id);
+
+            if (articulo == null)
             {
                 return new Response
                 {
-                    codigo = "900",
-                    mensaje = "Ha ocurrido un error al actualizar, intente más tarde",
+                    codigo = "404",
+                    mensaje = "Artículo no encontrado",
+                    respuesta = ""
                 };
             }
 
             return new Response
             {
                 codigo = "200",
-                mensaje = "Guardado correctamente",
-                respuesta = ""
-            };
-
-        }
-        public async Task<Response> obtenerArticulo(long id)
-        {
-
-            dtoArticulos infoArticulo = articulos.obternerPorId(id);
-
-
-            if (infoArticulo != null)
-            {
-                return new Response
-                {
-                    codigo = "200",
-                    mensaje = "Informacion del articulo",
-                    respuesta = infoArticulo
-                };
-            }
-
-            return new Response
-            {
-                codigo = "900",
-                mensaje = "Ocurrio un error",
-            };
-
-        }
-        public async Task<Response> EliminarArticulo(long id)
-        {
-            if (id == null || id == 0)
-            {
-                return new Response
-                {
-                    codigo = "901",
-                    mensaje = "Parametros incorrectos",
-                    respuesta = ""
-                };
-            }
-
-            bool eliminado = articulos.eliminacion(id);
-
-            if (!eliminado)
-            {
-                return new Response
-                {
-                    codigo = "900",
-                    mensaje = "Ha ocurrido un error al eliminar, intente más tarde",
-                    respuesta = ""
-                };
-            }
-            return new Response
-            {
-                codigo = "200",
-                mensaje = "Eliminado correctamente",
-                respuesta = ""
+                mensaje = "Información del artículo",
+                respuesta = articulo
             };
         }
-        public async Task<Response> lista(int iTake, int iSkip)
-        {
 
-            iTake = iTake == 0 ? 99999 : iTake;
-            var dtInfo = articulos.lista(iTake, iSkip);
-            int totalPages = dtInfo.filas == 0 ? 0 : (int)Math.Ceiling((double)dtInfo.filas / iTake);
+
+        public async Task<Response> EliminarArticuloAsync(long id)
+        {
+            if (id <= 0)
+            {
+                return ResponseError("901", "Parámetros incorrectos");
+            }
+
+            bool ok = await _repositorio.EliminacionAsync(id);
+
+            return ok
+                ? ResponseOk("Eliminado correctamente")
+                : ResponseError("900", "Error al eliminar");
+        }
+
+
+        public async Task<Response> ListaAsync(int take, int skip)
+        {
+            take = take == 0 ? 99999 : take;
+
+            var result = await _repositorio.ListaAsync(take, skip);
+
+            int totalPages = result.total == 0
+                ? 0
+                : (int)Math.Ceiling((double)result.total / take);
+
             return new Response
             {
                 codigo = "200",
                 mensaje = "",
                 respuesta = new
                 {
-                    data = JsonConvert.SerializeObject(dtInfo),
-                    totalRows = dtInfo.filas,
-                    totalPages = totalPages
+                    data = result.data,
+                    totalRows = result.total,
+                    totalPages
                 }
-
             };
         }
+
+        private static Response? ValidarArticulo(
+            dtoArticulos info,
+            bool esActualizacion)
+        {
+            if (string.IsNullOrEmpty(info.codigo))
+                return ResponseError("901", "El campo código es requerido");
+
+            if (string.IsNullOrEmpty(info.descripcion))
+                return ResponseError("901", "El campo descripción es requerido");
+
+            if (info.precio <= 0)
+                return ResponseError("901", "El precio debe ser mayor a 0");
+
+            if (info.stock < 0)
+                return ResponseError("901", "El stock no puede ser negativo");
+
+            return null;
+        }
+
+        private static Response ResponseOk(string mensaje) =>
+            new()
+            {
+                codigo = "200",
+                mensaje = mensaje,
+                respuesta = ""
+            };
+
+        private static Response ResponseError(string codigo, string mensaje) =>
+            new()
+            {
+                codigo = codigo,
+                mensaje = mensaje,
+                respuesta = ""
+            };
     }
 }

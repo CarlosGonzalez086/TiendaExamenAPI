@@ -1,47 +1,49 @@
-﻿using Azure;
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using TiendaExamenAPI.DbData.DtoModels.Cliente;
+using TiendaExamenAPI.DbData.DtoModels.Response;
 using TiendaExamenAPI.Services.Cliente;
 
 namespace TiendaExamenAPI.Controllers
 {
-    [Route("api/[controller]")]
     [ApiController]
+    [Route("api/[controller]")]
     public class ClienteController : ControllerBase
     {
-        ClienteServicio cliente = new();
+        private readonly ClienteServicio _clienteServicio;
+
+        public ClienteController(ClienteServicio clienteServicio)
+        {
+            _clienteServicio = clienteServicio;
+        }
 
         [HttpPost]
-        public async Task<IActionResult> guardarCliente(dtoCliente data)
+        public async Task<IActionResult> GuardarCliente([FromBody] dtoCliente data)
         {
-            DbData.DtoModels.Response.Response resp = new();
-            resp = await cliente.guardarCliente(data);
+            Response resp = await _clienteServicio.GuardarClienteAsync(data);
             return Ok(resp);
         }
 
+
         [HttpPut]
-        public async Task<IActionResult> actualizarCliente(dtoCliente userInfo)
+        public async Task<IActionResult> ActualizarCliente([FromBody] dtoCliente data)
         {
-            DbData.DtoModels.Response.Response resp = new();
-            resp = await cliente.actualizarCliente(userInfo);
+            Response resp = await _clienteServicio.ActualizarClienteAsync(data);
             return Ok(resp);
         }
 
         [HttpGet]
-        public async Task<IActionResult> obtenerCliente()
+        public async Task<IActionResult> ObtenerCliente()
         {
-            DbData.DtoModels.Response.Response resp = new();
-            resp = await cliente.obtenerCliente();
+            Response resp = await _clienteServicio.ObtenerClienteAsync();
             return Ok(resp);
         }
 
-        [HttpDelete("{id}")]
+
+        [HttpDelete("{id:long}")]
         public async Task<IActionResult> EliminarCliente(long id)
         {
-            DbData.DtoModels.Response.Response resp = new();
-            resp = await cliente.EliminarCliente(id);
+            Response resp = await _clienteServicio.EliminarClienteAsync(id);
             return Ok(resp);
         }
-
     }
 }

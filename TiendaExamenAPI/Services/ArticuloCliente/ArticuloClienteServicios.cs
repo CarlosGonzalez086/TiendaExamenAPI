@@ -1,7 +1,4 @@
-﻿using Newtonsoft.Json;
-using System.Data;
-using TiendaExamenAPI.DbData.DtoModels.ArticuloCliente;
-using TiendaExamenAPI.DbData.DtoModels.articulos;
+﻿using TiendaExamenAPI.DbData.DtoModels.ArticuloCliente;
 using TiendaExamenAPI.DbData.DtoModels.Response;
 using TiendaExamenAPI.DbData.Repository.ArticuloCliente;
 using TiendaExamenAPI.Services.Utils;
@@ -10,90 +7,73 @@ namespace TiendaExamenAPI.Services.ArticuloCliente
 {
     public class ArticuloClienteServicios
     {
-        ArticuloClienteRepositorio articuloCliente = new();
-        Context context = new();
-        public async Task<Response> guardarArticuloCliente(dtoArticuloCliente articuloClienteInfo) 
+        private readonly ArticuloClienteRepositorio _repositorio;
+        private readonly Context _context;
+
+        public ArticuloClienteServicios(
+            ArticuloClienteRepositorio repositorio,
+            Context context)
         {
-            if (articuloClienteInfo.articulos.Count == 0)
+            _repositorio = repositorio;
+            _context = context;
+        }
+        public async Task<Response> GuardarArticuloClienteAsync(
+            dtoArticuloCliente info)
+        {
+            if (info.articulos == null || info.articulos.Count == 0)
             {
-                return new Response
-                {
-                    codigo = "901",
-                    mensaje = "Debes tener al menos 1 producto para la compra",
-                    respuesta = ""
-                };
-            }
-            if (articuloClienteInfo.total == 0)
-            {
-                return new Response
-                {
-                    codigo = "901",
-                    mensaje = "El total debe ser mayor a 0",
-                    respuesta = ""
-                };
+                return ResponseError("901", "Debes tener al menos 1 producto");
             }
 
-            var result = articuloCliente.insertado(articuloClienteInfo.total);
-
-            if (result.success)
+            if (info.total <= 0)
             {
-                bool todoCorrecto = false;
-                foreach (dtoArticuloClienteDetalle clienteDetalle in articuloClienteInfo.articulos)                 
+                return ResponseError("901", "El total debe ser mayor a 0");
+            }
+
+            var result = await _repositorio.InsertadoAsync(info.total);
+            if (!result.success)
+            {
+                return ResponseError("901", "Error al registrar la compra");
+            }
+
+
+            foreach (var detalle in info.articulos)
+            {
+                var ok = await _repositorio.InsertadoDetalleAsync(
+                    (int)result.insertedId,
+                    detalle.articulo_id,
+                    info.cliente_id,
+                    detalle.cantidad);
+
+                if (!ok)
                 {
-                    bool correcto = await articuloCliente.insertadoDetalle(result.insertedId, clienteDetalle.articulo_id, articuloClienteInfo.cliente_id,clienteDetalle.cantidad);
-                    if (correcto)
-                    {
-                        todoCorrecto = true;
-                    }
-                }
-                if (todoCorrecto)
-                {
-                    return new Response
-                    {
-                        codigo = "200",
-                        mensaje = "Compra completada",
-                        respuesta = ""
-                    };
-                }
-                else
-                {
-                    return new Response
-                    {
-                        codigo = "901",
-                        mensaje = "Error en la compra",
-                        respuesta = ""
-                    };
+                    return ResponseError("901", "Error al registrar los productos");
                 }
             }
+
             return new Response
             {
-                codigo = "901",
-                mensaje = "Error en la compra",
+                codigo = "200",
+                mensaje = "Compra completada",
                 respuesta = ""
             };
-
         }
-        public async Task<Response> obtenerCompraCliente(long id)
-        {
 
-            if (id == 0)
+        public async Task<Response> ObtenerCompraClienteAsync(long id)
+        {
+            if (id <= 0)
             {
-                return new Response
-                {
-                    codigo = "901",
-                    mensaje = "Parametros incorrectos",
-                    respuesta = ""
-                };
+                return ResponseError("901", "Parámetros incorrectos");
             }
 
-            DataTable dtInfo = articuloCliente.obtenerCompraCliente(id);
+            var compra = await _repositorio.ObtenerCompraClienteAsync(id);
 
-            if (dtInfo.Rows.Count == 0)
+            if (compra == null)
             {
                 return new Response
                 {
                     codigo = "404",
-                    mensaje = "No se encontro información",
+                    mensaje = "No se encontró información",
                     respuesta = ""
                 };
             }
@@ -102,27 +82,44 @@ namespace TiendaExamenAPI.Services.ArticuloCliente
             {
                 codigo = "200",
                 mensaje = "",
-                respuesta = new { data = JsonConvert.SerializeObject(dtInfo) }
+                respuesta = new { data = compra }
             };
-
         }
-        public async Task<Response> lista(int iTake, int iSkip)
-        {
 
-            iTake = iTake == 0 ? 99999 : iTake;
-            var dtInfo = articuloCliente.lista(iTake, iSkip,context.getID());
-            int totalPages = dtInfo.filas == 0 ? 0 : (int)Math.Ceiling((double)dtInfo.filas / iTake);
+        public async Task<Response> ListaAsync(int take, int skip)
+        {
+            take = take == 0 ? 99999 : take;
+            var clienteId = _context.getID();
+
+            var result = await _repositorio.ListaAsync(
+                take,
+                skip,
+                clienteId);
+
+            int totalPages = result.total == 0
+                ? 0
+                : (int)Math.Ceiling((double)result.total / take);
+
             return new Response
             {
                 codigo = "200",
                 mensaje = "",
                 respuesta = new
                 {
-                    data = JsonConvert.SerializeObject(dtInfo),
-                    totalRows = dtInfo.filas,
-                    totalPages = totalPages
+                    data = result.data,
+                    totalRows = result.total,
+                    totalPages
                 }
+            };
+        }
 
+        private static Response ResponseError(string codigo, string mensaje)
+        {
+            return new Response
+            {
+                codigo = codigo,
+                mensaje = mensaje,
+                respuesta = ""
             };
         }
     }

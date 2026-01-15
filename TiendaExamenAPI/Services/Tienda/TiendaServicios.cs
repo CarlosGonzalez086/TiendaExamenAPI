@@ -1,6 +1,4 @@
-﻿using System.Data;
-using TiendaExamenAPI.DbData.DtoModels.Cliente;
-using TiendaExamenAPI.DbData.DtoModels.Response;
+﻿using TiendaExamenAPI.DbData.DtoModels.Response;
 using TiendaExamenAPI.DbData.DtoModels.Tienda;
 using TiendaExamenAPI.DbData.Repository.Tienda;
 
@@ -8,154 +6,130 @@ namespace TiendaExamenAPI.Services.Tienda
 {
     public class TiendaServicios
     {
-        TiendaRepositorio tienda = new();
+        private readonly TiendaRepositorio _tiendaRepositorio;
 
-        public async Task<Response> guardarTienda(dtoTienda tiendaInfo)
+        public TiendaServicios(TiendaRepositorio tiendaRepositorio)
         {
-            if (string.IsNullOrEmpty(tiendaInfo.sucursal))
-            {
-                return new Response
-                {
-                    codigo = "901",
-                    mensaje = "El campo de la sucursal es requerido",
-                    respuesta = ""
-                };
-            }
-            if (string.IsNullOrEmpty(tiendaInfo.direccion))
-            {
-                return new Response
-                {
-                    codigo = "901",
-                    mensaje = "El campo de la direccion es requerido",
-                    respuesta = ""
-                };
-            }
-
-            var insertOk = await tienda.insertado(tiendaInfo);
-
-            if (insertOk)
-            {
-                return new Response
-                {
-                    codigo = "200",
-                    mensaje = "Tienda registrada correctamente",
-                };
-            }
-            return new Response
-            {
-                codigo = "900",
-                mensaje = "Ha ocurrido un error al registrarse, intente más tarde",
-            };
-
+            _tiendaRepositorio = tiendaRepositorio;
         }
-
-        public async Task<Response> actualizarTienda(dtoTienda tiendaInfo)
+        public async Task<Response> GuardarTiendaAsync(dtoTienda tiendaInfo)
         {
+            if (string.IsNullOrWhiteSpace(tiendaInfo.sucursal))
+                return await Task.FromResult(Error("901", "El campo sucursal es requerido"));
 
-            long userId = tiendaInfo.id;
+            if (string.IsNullOrWhiteSpace(tiendaInfo.direccion))
+                return await Task.FromResult(Error("901", "El campo dirección es requerido"));
 
-            if (userId == 0)
-            {
-                return new Response
-                {
-                    codigo = "901",
-                    mensaje = "No se pudo obtener información de la sesión",
-                    respuesta = ""
-                };
-            }
-
-            if (string.IsNullOrEmpty(tiendaInfo.sucursal))
-            {
-                return new Response
-                {
-                    codigo = "901",
-                    mensaje = "El campo de la sucursal es requerido",
-                    respuesta = ""
-                };
-            }
-
-            if (string.IsNullOrEmpty(tiendaInfo.direccion))
-            {
-                return new Response
-                {
-                    codigo = "901",
-                    mensaje = "El campo de apellido de la direccion es requerido",
-                    respuesta = ""
-                };
-            }
-
-
-            bool insertOk = tienda.actualizacion(tiendaInfo, userId);
+            bool insertOk = await _tiendaRepositorio.InsertadoAsync(tiendaInfo);
 
             if (!insertOk)
             {
-                return new Response
+                return await Task.FromResult(new Response
                 {
                     codigo = "900",
-                    mensaje = "Ha ocurrido un error al actualizar, intente más tarde",
-                };
+                    mensaje = "Error al registrar la tienda"
+                });
             }
 
-            return new Response
+            return await Task.FromResult(new Response
             {
                 codigo = "200",
-                mensaje = "Guardado correctamente",
-                respuesta = ""
-            };
-
+                mensaje = "Tienda registrada correctamente"
+            });
         }
-        public async Task<Response> obtenerTienda(long id)
+        public async Task<Response> ActualizarTiendaAsync(dtoTienda tiendaInfo)
         {
+            if (tiendaInfo.id == 0)
+                return await Task.FromResult(Error("901", "Id inválido"));
 
-            dtoTienda infoTienda = tienda.obternerPorId(id);
+            if (string.IsNullOrWhiteSpace(tiendaInfo.sucursal))
+                return await Task.FromResult(Error("901", "El campo sucursal es requerido"));
 
+            if (string.IsNullOrWhiteSpace(tiendaInfo.direccion))
+                return await Task.FromResult(Error("901", "El campo dirección es requerido"));
 
-            if (infoTienda != null)
+            bool actualizado = await _tiendaRepositorio.ActualizacionAsync(tiendaInfo, tiendaInfo.id);
+
+            if (!actualizado)
             {
-                return new Response
+                return await Task.FromResult(new Response
                 {
-                    codigo = "200",
-                    mensaje = "Informacion de la tienda",
-                    respuesta = infoTienda
-                };
+                    codigo = "900",
+                    mensaje = "Error al actualizar la tienda"
+                });
             }
 
-            return new Response
+            return await Task.FromResult(new Response
             {
-                codigo = "900",
-                mensaje = "Ocurrio un error",
-            };
-
+                codigo = "200",
+                mensaje = "Guardado correctamente"
+            });
         }
-        public async Task<Response> EliminarTienda(long id)
+
+        public async Task<Response> ObtenerTiendaAsync(long id)
         {
-            if (id == null || id == 0)
+            if (id == 0)
+                return await Task.FromResult(Error("901", "Id inválido"));
+
+            dtoTienda tienda = await _tiendaRepositorio.ObtenerPorIdAsync(id);
+
+            if (tienda == null)
             {
-                return new Response
+                return await Task.FromResult(new Response
                 {
-                    codigo = "901",
-                    mensaje = "Parametros incorrectos",
-                    respuesta = ""
-                };
+                    codigo = "404",
+                    mensaje = "Tienda no encontrada"
+                });
             }
 
-            bool eliminado = tienda.eliminacion(id);
+            return await Task.FromResult(new Response
+            {
+                codigo = "200",
+                mensaje = "Información de la tienda",
+                respuesta = tienda
+            });
+        }
+
+        public async Task<Response> EliminarTiendaAsync(long id)
+        {
+            if (id == 0)
+                return await Task.FromResult(Error("901", "Parámetros incorrectos"));
+
+            bool eliminado = await _tiendaRepositorio.EliminacionAsync(id);
 
             if (!eliminado)
             {
-                return new Response
+                return await Task.FromResult(new Response
                 {
                     codigo = "900",
-                    mensaje = "Ha ocurrido un error al eliminar, intente más tarde",
-                    respuesta = ""
-                };
+                    mensaje = "Error al eliminar la tienda"
+                });
             }
-            return new Response
+
+            return await Task.FromResult(new Response
             {
                 codigo = "200",
-                mensaje = "Eliminado correctamente",
+                mensaje = "Eliminado correctamente"
+            });
+        }
+
+        private static Response Error(string codigo, string mensaje) =>
+            new()
+            {
+                codigo = codigo,
+                mensaje = mensaje,
                 respuesta = ""
             };
+        public async Task<Response> ObtenerTiendasAsync()
+        {
+            var lista = await _tiendaRepositorio.ObtenerTodosAsync();
+
+            return await Task.FromResult(new Response
+            {
+                codigo = "200",
+                mensaje = "Listado de tiendas",
+                respuesta = lista
+            });
         }
     }
 }

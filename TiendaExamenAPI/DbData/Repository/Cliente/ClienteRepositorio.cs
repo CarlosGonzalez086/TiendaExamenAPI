@@ -1,152 +1,123 @@
-﻿using Microsoft.Data.SqlClient;
-using System.Data;
+﻿using Microsoft.EntityFrameworkCore;
 using TiendaExamenAPI.DbData.DtoModels.Cliente;
+
+
 
 namespace TiendaExamenAPI.DbData.Repository.Cliente
 {
     public class ClienteRepositorio
     {
-        DbData.Connection.Connection conexion = new();
-        public dtoCliente obternerPorId(long ID)
+        private readonly MiTiendaDbContext _context;
+
+        public ClienteRepositorio(MiTiendaDbContext context)
         {
-            string sql = $@"SELECT 
-                            id,
-                            nombre,
-                            apellidos,
-                            direccion,
-                            correo_electronico,
-                            contrasena
-                        FROM clientes 
-                       WHERE id = {ID}";
-            var dt = conexion.Consultasql(sql);
-
-            if (dt.Rows.Count == 0)
-                return null;
-
-            var row = dt.Rows[0];
-            return new dtoCliente
-            {
-                id = long.Parse(row["id"].ToString()),
-                nombre = row["nombre"].ToString(),
-                apellidos = row["apellidos"].ToString(),
-                direccion = row["direccion"].ToString(),
-                correo_electronico = row["correo_electronico"].ToString(),
-                contrasena = row["contrasena"].ToString(),
-            };
+            _context = context;
         }
-        public DataTable obtenerCorreo(string email, long ID = 0)
+        public async Task<dtoCliente?> ObtenerPorIdAsync(long id)
         {
-            string sql = @$"    
-                 SELECT COUNT(*) correo		
-                 FROM
-                 clientes
-                 WHERE correo_electronico = @correo_electronico     
-                AND eliminado = 0
-                AND id <> {ID}";
-
-            SqlCommand cmd = new SqlCommand(sql, conexion.ConnectionSql());
-            cmd.Parameters.Add("@correo_electronico", SqlDbType.VarChar).Value = email;
-
-            return conexion.Consultasql("", cmd);
+            return await _context.Clientes
+                .Where(c => c.Id == id && !c.Eliminado)
+                .Select(c => new dtoCliente
+                {
+                    id = c.Id,
+                    nombre = c.Nombre,
+                    apellidos = c.Apellidos,
+                    direccion = c.Direccion,
+                    correo_electronico = c.CorreoElectronico,
+                    contrasena = c.Contrasena
+                })
+                .FirstOrDefaultAsync();
         }
-        public DataTable obtenerInfoLogin(string correo_electronico, string contrasena)
+        public async Task<bool> ExisteCorreoAsync(string email, long id = 0)
         {
-            string sql = @$"SELECT 
-                              id,
-                              nombre,
-                              apellidos,
-                              nombre +' '+ apellidos AS nombre_completo,
-                              correo_electronico,
-                              contrasena     
-                              FROM clientes (NOLOCK)
-                              WHERE  
-                              contrasena = @contrasena 
-                              AND correo_electronico = @correo_electronico
-                              AND eliminado = 0
-";
-            SqlCommand cmd = new SqlCommand(sql, conexion.ConnectionSql());
-            cmd.Parameters.Add("@contrasena", SqlDbType.VarChar).Value = contrasena;
-            cmd.Parameters.Add("@correo_electronico", SqlDbType.VarChar).Value = correo_electronico;
-            return conexion.Consultasql("", cmd);
+            return await _context.Clientes.AnyAsync(c =>
+                c.CorreoElectronico == email &&
+                !c.Eliminado &&
+                c.Id != id);
         }
-        public (bool success, long insertedId) insertado(dtoCliente dtoUser)
+
+        public async Task<dtoCliente?> ObtenerInfoLoginAsync(
+            string correoElectronico,
+            string contrasena)
+        {
+            return await _context.Clientes
+                .Where(c =>
+                    c.CorreoElectronico == correoElectronico &&
+                    c.Contrasena == contrasena &&
+                    !c.Eliminado)
+                .Select(c => new dtoCliente
+                {
+                    id = c.Id,
+                    nombre = c.Nombre,
+                    apellidos = c.Apellidos,
+                    direccion = c.Direccion,
+                    correo_electronico = c.CorreoElectronico,
+                    contrasena = c.Contrasena
+                })
+                .FirstOrDefaultAsync();
+        }
+
+        public async Task<(bool success, long insertedId)> InsertadoAsync(dtoCliente dto)
         {
             try
             {
-                string sql = @"
-                                INSERT INTO clientes 
-                                    (nombre, 
-                                     apellidos, 
-                                     direccion, 
-                                     fecha, 
-                                     correo_electronico, 
-                                     contrasena)
-                                OUTPUT INSERTED.ID
-                                VALUES (
-                                    @nombre,
-                                    @apellidos,
-                                    @direccion,
-                                    @fecha,
-                                    @correo_electronico,
-                                    @contrasena);";
-
-                using (SqlCommand cmd = new SqlCommand(sql, conexion.ConnectionSql()))
+                var cliente = new TiendaExamenAPI.Modelos.Cliente
                 {
-                    cmd.Parameters.Add("@nombre", SqlDbType.VarChar).Value = dtoUser.nombre;
-                    cmd.Parameters.Add("@apellidos", SqlDbType.VarChar).Value = dtoUser.apellidos;
-                    cmd.Parameters.Add("@direccion", SqlDbType.VarChar).Value = dtoUser.direccion;
-                    cmd.Parameters.Add("@correo_electronico", SqlDbType.VarChar).Value = dtoUser.correo_electronico;
-                    cmd.Parameters.Add("@contrasena", SqlDbType.VarChar).Value = dtoUser.contrasena;
-                    cmd.Parameters.Add("@fecha", SqlDbType.VarChar).Value = DateTime.UtcNow;
-                    long insertedId = Convert.ToInt64(cmd.ExecuteScalar());
-                    return (true, insertedId);
-                }
+                    Nombre = dto.nombre,
+                    Apellidos = dto.apellidos,
+                    Direccion = dto.direccion,
+                    CorreoElectronico = dto.correo_electronico,
+                    Contrasena = dto.contrasena,
+                    Fecha = DateTime.UtcNow,
+                    Eliminado = false
+                };
+
+                _context.Clientes.Add(cliente);
+                await _context.SaveChangesAsync();
+
+                return (true, cliente.Id);
             }
-            catch (Exception ex)
+            catch
             {
                 return (false, 0);
             }
         }
-        public bool actualizacion(dtoCliente dtoUser, long ID)
+
+        public async Task<bool> ActualizacionAsync(dtoCliente dto, long id)
         {
-            string sql = @$"UPDATE clientes SET
-                            nombre =  @nombre,
-                            apellidos = @apellidos,
-                            direccion = @direccion,
-                            fecha_actualizacion = @fecha_actualizacion
-                            WHERE id = @id";
+            var cliente = await _context.Clientes.FindAsync(id);
+            if (cliente == null) return false;
 
-            SqlCommand cmd = new SqlCommand(sql, conexion.ConnectionSql());
-            cmd.Parameters.Add("@nombre", SqlDbType.VarChar).Value = dtoUser.nombre;
-            cmd.Parameters.Add("@apellidos", SqlDbType.VarChar).Value = dtoUser.apellidos;
-            cmd.Parameters.Add("@direccion", SqlDbType.VarChar).Value = dtoUser.direccion;
-            cmd.Parameters.Add("@fecha_actualizacion", SqlDbType.DateTime).Value = DateTime.UtcNow;
-            cmd.Parameters.Add("@id", SqlDbType.BigInt).Value = ID;
+            cliente.Nombre = dto.nombre;
+            cliente.Apellidos = dto.apellidos;
+            cliente.Direccion = dto.direccion;
+            cliente.FechaActualizacion = DateTime.UtcNow;
 
-            return conexion.InsertaSql("", cmd);
+            await _context.SaveChangesAsync();
+            return true;
         }
-        public bool eliminacion(long id)
+
+        public async Task<bool> EliminacionAsync(long id)
         {
-            string sql = @"UPDATE clientes
-                        SET eliminado = 1,
-                        fecha_eliminado = @fecha_eliminado
-                        WHERE id = @id ";
+            var cliente = await _context.Clientes.FindAsync(id);
+            if (cliente == null) return false;
 
-            SqlCommand cmd = new SqlCommand(sql, conexion.ConnectionSql());
-            cmd.Parameters.Add("@fecha_eliminado", SqlDbType.DateTime).Value = DateTime.UtcNow;
-            cmd.Parameters.Add("@id", SqlDbType.BigInt).Value = id;
+            cliente.Eliminado = true;
+            cliente.FechaEliminado = DateTime.UtcNow;
 
-            return conexion.InsertaSql("", cmd);
+            await _context.SaveChangesAsync();
+            return true;
         }
-        public bool actualizarToken(long id, string token)
+
+        public async Task<bool> ActualizarTokenAsync(long id, Guid token)
         {
-            string sql = @$"UPDATE clientes
-                            SET token = @token
-                            WHERE id = @id";
-            SqlCommand cmd = new SqlCommand(sql, conexion.ConnectionSql());
-            cmd.Parameters.Add("@token", SqlDbType.VarChar).Value = token;
-            cmd.Parameters.Add("@id", SqlDbType.BigInt).Value = id;
-            return conexion.InsertaSql("", cmd);
+            var cliente = await _context.Clientes.FindAsync(id);
+            if (cliente == null) return false;
+
+            cliente.Token = token;
+            await _context.SaveChangesAsync();
+
+            return true;
         }
     }
 }

@@ -1,34 +1,44 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using TiendaExamenAPI.DbData.DtoModels.ArticuloCliente;
+using TiendaExamenAPI.DbData.DtoModels.Response;
 using TiendaExamenAPI.Services.ArticuloCliente;
-using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace TiendaExamenAPI.Controllers
 {
-    [Route("api/[controller]")]
     [ApiController]
+    [Route("api/[controller]")]
     public class CompraClienteController : ControllerBase
     {
-        ArticuloClienteServicios articuloClienteServicios = new();
+        private readonly ArticuloClienteServicios _articuloClienteServicios;
+
+        public CompraClienteController(ArticuloClienteServicios articuloClienteServicios)
+        {
+            _articuloClienteServicios = articuloClienteServicios;
+        }
+
+
         [HttpPost]
-        public async Task<IActionResult> guardarCompraCliente(dtoArticuloCliente articuloCliente)
+        public async Task<IActionResult> GuardarCompraCliente([FromBody] dtoArticuloCliente articuloCliente)
         {
-            DbData.DtoModels.Response.Response resp = new();
-            resp = await articuloClienteServicios.guardarArticuloCliente(articuloCliente);
+            Response resp = await _articuloClienteServicios.GuardarArticuloClienteAsync(articuloCliente);
             return Ok(resp);
         }
-        [HttpGet]
-        public async Task<IActionResult> obtenerCompraCliente(long id) 
+
+
+        [HttpGet("{id:long}")]
+        public async Task<IActionResult> ObtenerCompraCliente(long id)
         {
-            DbData.DtoModels.Response.Response resp = new();
-            resp = await articuloClienteServicios.obtenerCompraCliente(id);
+            Response resp = await _articuloClienteServicios.ObtenerCompraClienteAsync(id);
             return Ok(resp);
         }
+
+
         [HttpGet("lista")]
-        public async Task<IActionResult> lista(int iTake = 5, int iSkip = 0)
+        public async Task<IActionResult> Lista(
+            [FromQuery] int iTake = 5,
+            [FromQuery] int iSkip = 0)
         {
-            DbData.DtoModels.Response.Response resp = new();
-            resp = await articuloClienteServicios.lista(iTake, iSkip);
+            Response resp = await _articuloClienteServicios.ListaAsync(iTake, iSkip);
             return Ok(resp);
         }
     }
