@@ -1,7 +1,8 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using TiendaExamenAPI.DbData.DtoModels.articulos;
-using TiendaExamenAPI.Services.Articulos;
 using TiendaExamenAPI.DbData.DtoModels.Response;
+using TiendaExamenAPI.Modelos;
+using TiendaExamenAPI.Services.Articulos;
 
 namespace TiendaExamenAPI.Controllers
 {
@@ -44,6 +45,12 @@ namespace TiendaExamenAPI.Controllers
         public async Task<IActionResult> EliminarArticulo(long id)
         {
             Response resp = await _articulosServicios.EliminarArticuloAsync(id);
+            return Ok(resp);
+        }
+        [HttpGet("all")]
+        public async Task<IActionResult> ObtenerArticulos()
+        {
+            Response resp = await _articulosServicios.ObtenerArticulosAsync();
             return Ok(resp);
         }
 

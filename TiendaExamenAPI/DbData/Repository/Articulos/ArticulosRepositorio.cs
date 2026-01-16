@@ -1,6 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using TiendaExamenAPI.DbData;
 using TiendaExamenAPI.DbData.DtoModels.articulos;
+using TiendaExamenAPI.DbData.DtoModels.Tienda;
 using TiendaExamenAPI.Modelos;
 
 namespace TiendaExamenAPI.DbData.Repository.Articulos
@@ -109,6 +110,21 @@ namespace TiendaExamenAPI.DbData.Repository.Articulos
                 .ToListAsync();
 
             return (data, total);
+        }
+        public async Task<List<dtoArticulos>> ObtenerTodosAsync()
+        {
+            return await _context.Articulos
+                .Where(t => !t.Eliminado)
+                .Select(t => new dtoArticulos
+                {
+                    id = t.Id,
+                    descripcion = t.Descripcion,
+                    precio = t.Precio,
+                    imagen = t.Imagen,
+                    codigo = t.Codigo,
+                    stock = (int)t.Stock,
+                })
+                .ToListAsync();
         }
     }
 }

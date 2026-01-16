@@ -1,6 +1,7 @@
 ﻿using TiendaExamenAPI.DbData.DtoModels.articulos;
 using TiendaExamenAPI.DbData.DtoModels.Response;
 using TiendaExamenAPI.DbData.Repository.Articulos;
+using TiendaExamenAPI.DbData.Repository.Tienda;
 using TiendaExamenAPI.Services.FuncionesGenerales;
 
 namespace TiendaExamenAPI.Services.Articulos
@@ -147,6 +148,17 @@ namespace TiendaExamenAPI.Services.Articulos
                 return ResponseError("901", "El stock no puede ser negativo");
 
             return null;
+        }
+        public async Task<Response> ObtenerArticulosAsync()
+        {
+            var lista = await _repositorio.ObtenerTodosAsync();
+
+            return await Task.FromResult(new Response
+            {
+                codigo = "200",
+                mensaje = "Listado de tiendas",
+                respuesta = lista
+            });
         }
 
         private static Response ResponseOk(string mensaje) =>

@@ -50,22 +50,22 @@ namespace TiendaExamenAPI.Services.Cliente
 
             clienteInfo.contrasena = _generales.Encrypt(clienteInfo.contrasena);
 
-            var result = _clienteRepositorio.InsertadoAsync(clienteInfo);
+            var result = await _clienteRepositorio.InsertadoAsync(clienteInfo);
 
-            if (!result.IsCompleted)
+            if (!result.success)
             {
-                return await Task.FromResult(new Response
+                return new Response
                 {
                     codigo = "900",
                     mensaje = "Error al registrar usuario"
-                });
+                };
             }
 
-            return await Task.FromResult(new Response
+            return new Response
             {
                 codigo = "200",
                 mensaje = "Usuario registrado correctamente"
-            });
+            };
         }
 
         public async Task<Response> ActualizarClienteAsync(dtoCliente clienteInfo)
